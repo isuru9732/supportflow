@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: supportflow-postgres
+    environment:
+      POSTGRES_DB: supportflow
+      POSTGRES_USER: supportflow
+      POSTGRES_PASSWORD: localdevpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supportflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: supportflow-redis
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama
+    container_name: supportflow-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+
+  # --- Backend services (uncomment as each is scaffolded — Epic 0 Task
+  #     only sets up infra; services are added incrementally per backlog) ---
+
+  # gateway:
+  #   build: ./services/gateway
+  #   ports: ["8080:8080"]
+  #   depends_on: [identity, organization, chat]
+
+  # identity:
+  #   build: ./services/identity
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/supportflow
+  #     SPRING_DATASOURCE_USERNAME: supportflow
+  #     SPRING_DATASOURCE_PASSWORD: localdevpassword
+
+  # dashboard:
+  #   build: ./apps/dashboard
+  #   ports: ["3000:3000"]
+  #   depends_on: [gateway]
+
+volumes:
+  pgdata:
+  ollama_models:
