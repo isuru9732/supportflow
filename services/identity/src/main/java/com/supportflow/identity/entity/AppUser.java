@@ -36,4 +36,5 @@ public class AppUser {
     public String getPasswordHash() { return passwordHash; }
     public boolean isEmailVerified() { return emailVerified; }
     public Instant getCreatedAt() { return createdAt; }
+    public void markEmailVerified() { this.emailVerified = true; }
 }
