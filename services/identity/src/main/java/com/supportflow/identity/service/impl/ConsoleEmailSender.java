@@ -17,4 +17,12 @@ public class ConsoleEmailSender implements EmailSender {
         System.out.println("Link: http://localhost:3000/verify-email?token=" + verificationToken);
         System.out.println("==========================================");
     }
+
+    @Override
+    public void sendPasswordResetEmail(String toEmail, String resetToken) {
+        System.out.println("=== PASSWORD RESET EMAIL (console stub) ===");
+        System.out.println("To: " + toEmail);
+        System.out.println("Link: http://localhost:3000/reset-password?token=" + resetToken);
+        System.out.println("=============================================");
+    }
 }

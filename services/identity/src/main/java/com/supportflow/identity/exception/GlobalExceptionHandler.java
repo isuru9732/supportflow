@@ -1,11 +1,12 @@
 package com.supportflow.identity.exception;
 
-import com.supportflow.identity.common.ApiError;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import com.supportflow.common.response.ApiError;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -47,5 +48,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleEmailNotVerified(EmailNotVerifiedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiError("EMAIL_NOT_VERIFIED", ex.getMessage(), null));
+    }
+
+    @ExceptionHandler(InvalidResetTokenException.class)
+    public ResponseEntity<ApiError> handleInvalidResetToken(InvalidResetTokenException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError("INVALID_RESET_TOKEN", ex.getMessage(), null));
+    }
+
+    @ExceptionHandler(GoogleAuthException.class)
+    public ResponseEntity<ApiError> handleGoogleAuthError(GoogleAuthException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiError("GOOGLE_AUTH_FAILED", ex.getMessage(), null));
     }
 }
