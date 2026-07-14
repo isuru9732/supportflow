@@ -181,6 +181,22 @@ Production (demo):
 
 ---
 
-## 7. Next Steps
+## 7. Implementation Addendum (added during Epic 2 — supersedes part of §3's assumption)
+
+Doc 06 originally assumed the **Gateway** would extract `orgId` from the JWT and forward it internally to services. In practice, Epic 0's Gateway is still a routing skeleton (JWT validation not yet built out), so Epic 2 needed org-context resolution *before* the Gateway was ready for it. The actual interim implementation, now live in `organization` service:
+
+- Each service **verifies the JWT itself** using a shared `JwtVerifier` (lives in the `common` module, `com.supportflow.common.security`), not the Gateway.
+- Org context is resolved per-request via an **`X-Org-Id` header**, checked against the `membership` table (does this user actually belong to this org?) before any org-scoped query runs.
+- A `OrgContextInterceptor` (Spring `HandlerInterceptor`) does this check and then runs `SET LOCAL app.current_org_id` for that request's transaction, wiring into the Postgres RLS policies from Doc 04 §4 / Doc 06 §3 exactly as originally designed — only *where* this happens moved (per-service now, Gateway later).
+
+**This is a deliberate, temporary decision, not a workaround being hidden.** Nothing in the services themselves needs to change when the Gateway is eventually built out to do this centrally — the membership-check-then-set-session-variable logic can move wholesale into the Gateway later, and services simply start trusting a Gateway-forwarded header instead of validating the JWT themselves. Tracked as a real task, not forgotten: see Doc 10 Epic 0 remainder.
+
+**Every service needing JWT verification must:**
+1. Add `@ComponentScan(basePackages = {"com.supportflow.<service>", "com.supportflow.common"})` to its main application class (see Doc 09 for why — `common`'s `@Component` classes aren't auto-scanned otherwise).
+2. Copy `identity`'s RSA **public** key only (never the private key) into `src/main/resources/keys/public_key.pem`.
+
+---
+
+## 8. Next Steps
 
 → **Doc 04: Database Design** (ERD + table definitions, building on the service boundaries above)

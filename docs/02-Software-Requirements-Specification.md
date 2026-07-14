@@ -26,7 +26,7 @@ This document defines the functional and non-functional requirements for Phase 1
 |---|---|---|
 | FR-1.1 | User can register with email + password | Must |
 | FR-1.2 | User can log in with Google OAuth | Must |
-| FR-1.3 | User receives email verification link on signup; account is limited (no widget publish) until verified | Must |
+| FR-1.3 | User receives email verification link on signup; login is blocked with a specific error until the email is verified | Must |
 | FR-1.4 | User can request password reset via email | Must |
 | FR-1.5 | Passwords are hashed (bcrypt/argon2); never logged or stored in plaintext | Must |
 | FR-1.6 | JWT access token (short-lived) + refresh token (long-lived, rotated) issued on login | Must |

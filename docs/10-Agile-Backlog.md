@@ -69,6 +69,11 @@ Every **Task** is sized to fit in one evening session (45–90 min). If a task f
 - [ ] Task: Spring Boot gateway service, basic routing to a stub service (2 hr)
 - [ ] Task: JWT validation middleware skeleton (no real auth yet, just structure) (1.5 hr)
 
+**Feature: Shared common module** *(added mid-Epic 1, once per-endpoint envelope classes became repetitive)*
+- [x] Task: Create `services/common` Maven module — `RequestEnvelope<T>`, `ApiResponse<T>`, `ApiError`, `PaginationMeta` (Doc 05 §1 conventions) (1.5 hr)
+- [x] Task: Install locally, wire into `identity` service, delete per-endpoint envelope classes (1 hr)
+- [ ] Task: Add `common` build step to CI pipeline once CI is implemented (Doc 09 §4 — open task, not blocking now) (0.5–1.5 hr depending on approach chosen)
+
 ---
 
 ## 5. Epic 1 — Authentication & Identity

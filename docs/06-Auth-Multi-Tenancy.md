@@ -75,6 +75,8 @@ This connects the JWT to the Postgres RLS policies defined in Doc 04 §4. The fl
 
 **`SET LOCAL` (not `SET`)** — scopes the setting to the current transaction only, so connection pooling can't leak one tenant's context into the next request that reuses the same pooled connection. This detail matters a lot in practice and is a common source of real-world multi-tenant bugs if missed.
 
+**Implementation note (Epic 2):** steps 1–3 above describe the *intended end state* once the Gateway is fully built. In the actual Epic 2 implementation, the Gateway isn't there yet, so each service (starting with `organization`) validates the JWT itself via a shared `JwtVerifier` (in the `common` module) and resolves org context from an `X-Org-Id` header + a membership-table check, rather than trusting a Gateway-forwarded claim. Full detail in Doc 03 §7. The RLS wiring itself (`SET LOCAL app.current_org_id`) is unchanged — only *what validates the request and extracts the org id* moved, temporarily, into each service.
+
 ---
 
 ## 4. Invite Flow (including edge cases)
@@ -110,16 +112,26 @@ to {Org}" email             set your password" email
 
 ## 5. Google OAuth Flow
 
+**As actually implemented (differs from the original code-exchange sketch below):** the frontend uses Google Identity Services' client-side sign-in to get a signed **ID token** directly from Google, then sends just that token to `POST /auth/google`. The backend verifies the token's signature against Google's public keys (via `GoogleIdTokenVerifier`, with `setAudience` pinned to our client ID) — no authorization-code exchange, no client secret needed on our backend at all. Simpler and standard for SPA + separate-backend architectures like ours.
+
 ```
-Dashboard → redirects to Google consent screen
-Google → redirects back with authorization code
-Backend → exchanges code for Google profile (email, verified status)
-Backend → finds or creates User by email
-   - If email matches an existing password-based account: link Google as
-     an additional login method (do NOT create a duplicate user)
-   - Email from Google is trusted as pre-verified (skip email_verified flow)
+Browser → Google Identity Services JS → user signs in → Google returns
+          a signed ID token directly to the browser
+Browser → POST /auth/google { idToken }
+Backend → GoogleIdTokenVerifier.verify(idToken) — checks signature +
+           audience (must match our GOOGLE_OAUTH_CLIENT_ID)
+Backend → extract email, email_verified, sub (Google's stable user id)
+Backend → find by google_id, else find-or-create by email:
+   - Existing password-based account with this email → link Google
+     (set google_id on the existing row) rather than creating a duplicate
+   - No existing account → create new user with password_hash = NULL
+     (see Doc 04 §6), email_verified = true (Google's verification trusted)
 Backend → issues access + refresh token as normal
 ```
+
+**Google Cloud setup required** (one-time, per environment): OAuth consent screen configured, OAuth client ID (Web application type) created, authorized JavaScript origins added per environment (`http://localhost:5500` for local test harness; the real dashboard domain once deployed). Client ID goes in `GOOGLE_OAUTH_CLIENT_ID` env var — **no client secret needed** for this flow, since verification is signature-based, not code-exchange-based.
+
+**Production reminder:** the authorized JavaScript origins list in Google Cloud Console must be updated to include the real staging/demo domain (Doc 09 §1) before Google sign-in will work anywhere other than localhost — easy to forget since local dev works fine without it.
 
 ---
 

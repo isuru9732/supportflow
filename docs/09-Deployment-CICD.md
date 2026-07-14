@@ -76,6 +76,14 @@ supportflow/
 ├── apps/
 │   └── dashboard/          (Next.js)
 ├── services/
+│   ├── common/             Shared library (NOT a deployable service) — DTOs
+│   │                       and response envelopes (RequestEnvelope,
+│   │                       ApiResponse, ApiError, PaginationMeta) matching
+│   │                       Doc 05's API conventions. Installed to local
+│   │                       ~/.m2 via `mvn install`; every other service
+│   │                       depends on it as a normal Maven artifact. Added
+│   │                       during Epic 1 once per-endpoint envelope classes
+│   │                       became repetitive across auth endpoints.
 │   ├── gateway/
 │   ├── identity/
 │   ├── organization/
@@ -88,6 +96,8 @@ supportflow/
 ├── docker-compose.yml
 └── .github/workflows/
 ```
+
+**Build order note:** `common` must be built and installed (`mvn install`) before any service that depends on it. This is transparent in local development (one manual step, done once per change to `common`) but needs an explicit step added to the CI/CD pipeline below before it goes through GitHub Actions/Docker — flagged in §4.
 
 ---
 
@@ -122,6 +132,11 @@ On merge to main:
 
 **Path-based triggers:** since it's a monorepo, use `paths:` filters in GitHub Actions so a change to `services/chat` doesn't rebuild/redeploy `services/knowledge` unnecessarily — keeps CI fast and free-tier CI minutes from being wasted.
 
+**Open task — building `common` in CI (added when the shared module was introduced during Epic 1):** every job above that touches a backend service must first run `mvn install` inside `services/common` before it can build/test that service, since `common` is a local Maven dependency, not yet published anywhere CI can fetch it from. Two options when this gets implemented:
+1. Add a `common` build as an explicit first step in every backend service's CI job (simple, some duplication).
+2. Publish `common` to GitHub Packages once, version it properly, and have services pull it like any other dependency (more setup, matches how a real multi-service org would do it).
+Not yet implemented — tracked here and in Doc 10 Epic 0/8 so it isn't forgotten when CI is actually built out.
+
 ---
 
 ## 5. Database Migrations
@@ -129,6 +144,42 @@ On merge to main:
 - **Tool:** Flyway (pairs naturally with Spring Boot).
 - Migrations live per-service (`services/identity/src/main/resources/db/migration/`) since each service technically owns its own tables even though they share one physical database in Phase 1 (shared schema per Doc 04) — this keeps a future move to separate databases per service (if ever needed) from being a rewrite.
 - Migrations run automatically on service startup in dev; run as an explicit CI step before deploy in staging (avoids a service crash-looping on a bad migration reaching prod-like environment un-reviewed).
+
+**Critical convention — isolated Flyway history tables per service (discovered during Epic 2):** because every service shares the same physical Postgres database, Flyway's default history table (`flyway_schema_history`) would be shared across services too, causing checksum/version collisions the moment a second service adds migrations. Every service **must** set an explicit, unique history table name:
+
+```properties
+# identity
+spring.flyway.table=flyway_schema_history_identity
+
+# organization
+spring.flyway.table=flyway_schema_history_organization
+
+# (and so on for chat, knowledge, ai, notification when they're built)
+```
+
+Without this, each new service's first migration will fail with a Flyway validation error the moment it points at the shared database — this isn't optional, it's required from the first migration of every future service.
+
+**Second related convention — `baseline-on-migrate` for every service after the first:** because the shared `public` schema already has tables from whichever service touched it first (identity), every *subsequent* service's Flyway (using its own isolated history table per the convention above) will see a non-empty schema with no history and refuse to run, as a safety check. Every service must also set:
+
+```properties
+spring.flyway.baseline-on-migrate=true
+```
+
+This tells that service's Flyway instance to treat the current schema state as its own starting baseline rather than erroring out — safe here specifically because each service's migrations only ever touch tables it owns (Doc 09 §5's per-service migration convention), so there's no risk of one service's baseline accidentally skipping or conflicting with another's actual migrations.
+
+**Important refinement (discovered when the real V1 migration got silently skipped):** `baseline-on-migrate=true` defaults to baselining at version `1` — if your service's actual first migration is also named `V1__...` (as ours are), Flyway treats it as already covered and never runs it, leaving tables missing with no error at migration time (Hibernate's schema validator catches it later instead, with a confusing "missing table" error). Every service must also set:
+```properties
+spring.flyway.baseline-version=0
+```
+so the real `V1` migration is correctly treated as newer than the baseline and actually executes.
+
+**Third related convention — component-scanning the `common` module:** classes in `common` (like `JwtVerifier`) are annotated `@Component`/`@Configuration`, but Spring Boot's default component scan only covers the main application class's own package tree. Since `com.supportflow.common` is a sibling package, not a sub-package, of e.g. `com.supportflow.organization`, it's invisible to scanning by default — resulting in a "required a bean... that could not be found" startup failure. Every service that depends on `common` must add:
+```java
+@SpringBootApplication
+@ComponentScan(basePackages = {"com.supportflow.<service-name>", "com.supportflow.common"})
+public class <ServiceName>Application { ... }
+```
+to its main application class.
 
 ---
 

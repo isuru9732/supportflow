@@ -28,10 +28,14 @@ Lightweight STRIDE-style pass — not exhaustive, but covers what actually matte
 |---|---|---|
 | DB credentials | `.env` (gitignored) | Platform env vars (Railway/Render secrets) |
 | LLM API keys (Gemini/OpenAI) | `.env` | Platform env vars |
-| JWT signing key | `.env`, generated per environment | Platform env vars, rotated if ever exposed |
+| JWT signing key (RS256 keypair) | `services/identity/src/main/resources/keys/` (gitignored — see below) | Platform env vars holding key contents, or a secrets manager; **never baked into a Docker image** |
+| RSA public key (verification only) | Copied into each verifying service's `resources/keys/public_key.pem` | Same — public key only, safe to distribute more widely than the private key, but still not committed to git as a matter of consistent practice |
+| Google OAuth client ID | `.env` (`GOOGLE_OAUTH_CLIENT_ID`) | Platform env vars — **no client secret needed** at all for our ID-token verification flow (Doc 06 §5) |
 | Widget API keys (per-tenant) | N/A — generated at runtime | Hashed in DB (`api_key.key_hash`), plaintext shown to user once at creation only |
 
 **Rule:** nothing secret ever committed to git. `.env.example` with placeholder keys committed instead, real `.env` gitignored from day one of the repo.
+
+**RSA keypair specifics (added during Epic 1/2 implementation):** the private key lives only in `identity` service (the signer); every other service needing to verify tokens gets **only the public key**, copied manually into its own resources during local dev. `services/*/src/main/resources/keys/` is gitignored entirely — confirmed in the root `.gitignore`. **Production task (not yet done):** figure out the actual secret-distribution mechanism for the private key and every service's copy of the public key before deploying — env-var-embedded PEM content is the simplest option on Railway/Render, but decide and document this explicitly before the first real deploy rather than improvising under time pressure.
 
 ## 3. Token Storage — Dashboard vs Widget
 
